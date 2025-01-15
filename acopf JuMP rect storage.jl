@@ -1,19 +1,28 @@
-#=
 
+#=
 using Pkg
 Pkg.add("PowerModels")
 Pkg.add("Interpolations")
-using Interpolations
+Pkg.add("JuMP")
+Pkg.add("Ipopt")
+Pkg.add(["Juniper", "NLopt"])
+using Juniper
 
+using Interpolations
+using PowerModels
 using JuMP
-using Ipopt =#
+using Ipopt 
+using LinearAlgebra 
+=#
 
 #build nested dictionary
 my_data = PowerModels.parse_file("pglib_opf_case14_ieee_mod.m")
 n_bus = length(my_data["bus"])
+n_storage = length(my_data["storage"])
 
 base_MVA = my_data["baseMVA"]
 
+interval_split = my_data["time_elapsed"]
 interval_split = 1
 total_hrs = 24
 
@@ -30,10 +39,9 @@ for i in 0:length(summer_wkdy_qrtr_scalar) - 1
     summer_wkdy_qrtr_scalar[i+1] = get_profile(i*interval_split)
 end
 
-println(length(summer_wkdy_qrtr_scalar))
 # Create a list of dictionaries for each bus
 bus_list = [
-    Dict("i" => 0, "pd" => zeros(length(summer_wkdy_qrtr_scalar)), "gs" => 0.0, "qd" => zeros(length(summer_wkdy_qrtr_scalar)), "bs" => 0, "bus_type" => 0, "arcs" => [], "gen_idx" => []) for _ in 1:n_bus
+    Dict("i" => 0, "pd" => zeros(length(summer_wkdy_qrtr_scalar)), "gs" => 0.0, "qd" => zeros(length(summer_wkdy_qrtr_scalar)), "bs" => 0, "bus_type" => 0, "arcs" => [], "gen_idx" => [], "storage_idx" => []) for _ in 1:n_bus
 ]
 
 
@@ -173,10 +181,52 @@ for key in keys(my_data["load"])
 end
 
 
+storage_list = [
+    Dict("i" => 0, "Einit" => 0, "Emax" => 0.0, "Pcmax" => 0, "Pdmax" => 0, "etac" => 0, "etad" => 0, "Zr" => 0, "Zim" => 0, "Srating" => 0, "Pexts" => 0, "Qexts" => 0, "bus" => 0) for _ in 1:n_storage
+]
+for key in eachindex(my_data["storage"])
+    i = parse(Int, key)
+    storage_list[i]["i"] = i
+    storage_list[i]["Einit"] = my_data["storage"][key]["energy"]
+    storage_list[i]["Emax"] = my_data["storage"][key]["energy_rating"]
+    storage_list[i]["Pcmax"] = my_data["storage"][key]["charge_rating"]
+    storage_list[i]["Pdmax"] = my_data["storage"][key]["discharge_rating"]
+    #these are swapped form data and paper?
+    storage_list[i]["etac"] = my_data["storage"][key]["charge_efficiency"]
+    storage_list[i]["etad"] = my_data["storage"][key]["discharge_efficiency"]
+    storage_list[i]["Zr"] = my_data["storage"][key]["r"]
+    storage_list[i]["Zim"] = my_data["storage"][key]["x"]
+    storage_list[i]["Srating"] = my_data["storage"][key]["thermal_rating"]
+    storage_list[i]["Pexts"] = my_data["storage"][key]["ps"]
+    storage_list[i]["Qexts"] = my_data["storage"][key]["qs"]
+    storage_list[i]["bus"] = my_data["storage"][key]["storage_bus"]
+
+    push!(bus_list[my_data["storage"][key]["storage_bus"]]["storage_idx"], i)
+
+end
+
+charge_init = zeros(length(summer_wkdy_qrtr_scalar))
+discharge_init = zeros(length(summer_wkdy_qrtr_scalar))
+
+for i in eachindex(summer_wkdy_qrtr_scalar)
+    if i < 6/interval_split
+        charge_init[i] = .25
+    elseif 9/interval_split < i < 17/interval_split
+        discharge_init[i] = .2
+    end
+end
+
+
+
+#optimizer = Juniper.Optimizer
+#nl_solver = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
+
+# Create a JuMP model using Juniper
+#model = Model(optimizer_with_attributes(optimizer, "nl_solver"=>nl_solver))
 
 model = Model(Ipopt.Optimizer)
 
-
+set_optimizer_attribute(model, "max_iter", 10000)
 
 #not sure if these should be initialized at nonzero
 vr = @variable(model, vr[i = 1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1/(2^0.5))
@@ -190,14 +240,29 @@ p = @variable(model, -rate_as[i] <= p[i =1:length(arc_list), t = 1:length(summer
 
 q = @variable(model, -rate_as[i] <= q[i=1:length(arc_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= rate_as[i])
 
+pstc = @variable(model, 0 <= pstc[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Pcmax"])
+
+pstd = @variable(model, 0 <= pstd[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Pdmax"])
+
+pst = @variable(model, pst[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
+
+#this is maybe supposed to have bounds??
+qst = @variable(model, qst[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
+
+I = @variable(model, I[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
+
+qint = @variable(model, -storage_list[i]["Srating"] <= qint[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Srating"])
+
+E = @variable(model, 0 <= E[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Emax"])
+
+#only for use in MINLP version
+#zc = @variable(model, zc[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)], Bin)
+
+
 obj = @objective(model, Min, sum(pg[i,t]^2*gen_list[i]["cost1"]+pg[i,t]*gen_list[i]["cost2"]+gen_list[i]["cost3"] for i in eachindex(gen_list), t in eachindex(summer_wkdy_qrtr_scalar)))
-
-
 
 #this is hard coded, in this model it doesn't matter but in the future it may?
 c0 = @constraint(model,  [t = eachindex(summer_wkdy_qrtr_scalar)], atan(vim[4, t]/vr[4, t]) == 0)
-
-
 
 c1 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["f_idx"], t] -(  (branch_list[i]["g"] + branch_list[i]["g_fr"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]^2+vim[branch_list[i]["f_bus"], t]^2) + 
                 (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] + vim[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t])+
@@ -224,12 +289,43 @@ c6 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_q
 
 c7 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], 0 >= p[branch_list[i]["t_idx"], t]^2 + q[branch_list[i]["t_idx"], t]^2 - branch_list[i]["a_rate_sq"])
 
-c8 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["pd"][t] + bus_list[i]["gs"]*(vr[i, t]^2+vim[i, t]^2) + sum(p[j, t] for j in bus_list[i]["arcs"]) - sum(pg[k, t] for k in bus_list[i]["gen_idx"]) == 0)
+c8 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["pd"][t] + bus_list[i]["gs"]*(vr[i, t]^2+vim[i, t]^2) + sum(p[j, t] for j in bus_list[i]["arcs"]) - 
+                sum(pg[k, t] for k in bus_list[i]["gen_idx"]) + sum(pst[l, t] for l in bus_list[i]["storage_idx"]) == 0)
 
-c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["qd"][t] - bus_list[i]["bs"]*(vr[i, t]^2+vim[i, t]^2)  + sum(q[j, t] for j in bus_list[i]["arcs"]) - sum(qg[k, t] for k in bus_list[i]["gen_idx"]) == 0)
+c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["qd"][t] - bus_list[i]["bs"]*(vr[i, t]^2+vim[i, t]^2)  + sum(q[j, t] for j in bus_list[i]["arcs"]) - 
+                sum(qg[k, t] for k in bus_list[i]["gen_idx"]) + sum(qst[l, t] for l in bus_list[i]["storage_idx"])== 0)
 
 c10 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], vmins[i]^2 <= vr[i, t]^2+vim[i, t]^2 <= vmaxs[i]^2)
 
+c11 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t] + pstd[c, t] - pstc[c, t] == storage_list[c]["Pexts"] + storage_list[c]["Zr"]*I[c, t]^2)
+
+c12 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], qst[c, t] == qint[c, t] + storage_list[c]["Qexts"] + storage_list[c]["Zim"]*I[c, t]^2)
+
+c13 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t]^2 + qst[c, t]^2 == (vr[storage_list[c]["bus"], t]^2 + vim[storage_list[c]["bus"], t]^2)*I[c, t]^2)
+
+c14 = @constraint(model, [c = eachindex(storage_list), t = 2:length(summer_wkdy_qrtr_scalar)], E[c, t] - E[c, t-1] == interval_split*(storage_list[c]["etac"]*pstc[c, t]- pstd[c, t]/storage_list[c]["etad"]))
+
+c15 = @constraint(model, [c = eachindex(storage_list)], E[c, 1] - storage_list[c]["Einit"] == interval_split*(storage_list[c]["etac"]*pstc[c, 1]- pstd[c, 1]/storage_list[c]["etad"]))
+
+c16 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t]^2 + qst[c, t]^2 <= storage_list[c]["Srating"]^2)
+
+c17 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], -storage_list[c]["Srating"] <= pstd[c, t] - pstc[c, t] <= storage_list[c]["Srating"])
+
+c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t]*pstd[c, t] == 0)
+
+#for use in MINLP
+#c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t] <= storage_list[c]["Pcmax"]*zc[c, t])
+#c18b = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstd[c, t] <= storage_list[c]["Pdmax"]*(1 - zc[c, t]))
+
+
+#=
+c19 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t] == 0)
+c20 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstd[c, t] == 0)
+c21 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t] == 0)
+c22 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], qst[c, t] == 0)
+c23 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], qint[c, t] == 0)
+c24 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], I[c, t] == 0)
+=#
+
+
 optimize!(model)
-
-
