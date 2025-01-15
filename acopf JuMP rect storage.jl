@@ -311,7 +311,7 @@ c16 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy
 
 c17 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], -storage_list[c]["Srating"] <= pstd[c, t] - pstc[c, t] <= storage_list[c]["Srating"])
 
-c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t]*pstd[c, t] == 0)
+#c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t]*pstd[c, t] == 0)
 
 #for use in MINLP
 #c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t] <= storage_list[c]["Pcmax"]*zc[c, t])
