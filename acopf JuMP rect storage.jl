@@ -190,10 +190,17 @@ for key in eachindex(my_data["storage"])
     storage_list[i]["Einit"] = my_data["storage"][key]["energy"]
     storage_list[i]["Emax"] = my_data["storage"][key]["energy_rating"]
     storage_list[i]["Pcmax"] = my_data["storage"][key]["charge_rating"]
+
+    #this is slightly different from what paper states
     storage_list[i]["Pdmax"] = my_data["storage"][key]["discharge_rating"]
+    #storage_list[i]["Pdmax"] = 0.75
+
     #these are swapped form data and paper?
     storage_list[i]["etac"] = my_data["storage"][key]["charge_efficiency"]
+    #storage_list[i]["etac"] = .85
     storage_list[i]["etad"] = my_data["storage"][key]["discharge_efficiency"]
+    #storage_list[i]["etad"] = 0.9
+
     storage_list[i]["Zr"] = my_data["storage"][key]["r"]
     storage_list[i]["Zim"] = my_data["storage"][key]["x"]
     storage_list[i]["Srating"] = my_data["storage"][key]["thermal_rating"]
@@ -205,16 +212,7 @@ for key in eachindex(my_data["storage"])
 
 end
 
-charge_init = zeros(length(summer_wkdy_qrtr_scalar))
-discharge_init = zeros(length(summer_wkdy_qrtr_scalar))
 
-for i in eachindex(summer_wkdy_qrtr_scalar)
-    if i < 6/interval_split
-        charge_init[i] = .25
-    elseif 9/interval_split < i < 17/interval_split
-        discharge_init[i] = .2
-    end
-end
 
 
 
@@ -226,7 +224,7 @@ end
 
 model = Model(Ipopt.Optimizer)
 
-set_optimizer_attribute(model, "max_iter", 10000)
+set_optimizer_attribute(model, "max_iter", 1000)
 
 #not sure if these should be initialized at nonzero
 vr = @variable(model, vr[i = 1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1/(2^0.5))
