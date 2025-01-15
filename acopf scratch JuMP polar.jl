@@ -1,9 +1,9 @@
-using Pkg
+#= using Pkg
 Pkg.add("PowerModels")
 
 using PowerModels
 using JuMP
-using Ipopt
+using Ipopt =#
 
 #build nested dictionary
 my_data = PowerModels.parse_file("pglib_opf_case14_ieee.m")

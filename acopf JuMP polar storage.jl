@@ -224,11 +224,11 @@ end
 
 model = Model(Ipopt.Optimizer)
 
-set_optimizer_attribute(model, "max_iter", 1000)
+set_optimizer_attribute(model, "max_iter", 5000)
 
 #not sure if these should be initialized at nonzero
-vr = @variable(model, vr[i = 1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1/(2^0.5))
-vim = @variable(model, vim[i=1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1/(2^0.5))
+va = @variable(model, va[i = 1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)])
+vm = @variable(model, vmins[i] <= vm[i=1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= vmaxs[i], start = 1)
 
 pg = @variable(model, pmins[i] <= pg[i = 1:length(gen_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= pmaxs[i])
 
@@ -260,46 +260,47 @@ E = @variable(model, 0 <= E[i = 1:length(storage_list), t = 1:length(summer_wkdy
 obj = @objective(model, Min, sum(pg[i,t]^2*gen_list[i]["cost1"]+pg[i,t]*gen_list[i]["cost2"]+gen_list[i]["cost3"] for i in eachindex(gen_list), t in eachindex(summer_wkdy_qrtr_scalar)))
 
 #this is hard coded, in this model it doesn't matter but in the future it may?
-c0 = @constraint(model,  [t = eachindex(summer_wkdy_qrtr_scalar)], atan(vim[4, t]/vr[4, t]) == 0)
-
-c1 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["f_idx"], t] -(  (branch_list[i]["g"] + branch_list[i]["g_fr"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]^2+vim[branch_list[i]["f_bus"], t]^2) + 
-                (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] + vim[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t])+
-                (-branch_list[i]["b"]*branch_list[i]["tr"]-branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vim[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] - vr[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t])) == 0)
+c0 = @constraint(model,  [t = eachindex(summer_wkdy_qrtr_scalar)], va[4, t] == 0)
 
 
-c2 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], q[branch_list[i]["f_idx"], t] -( -(branch_list[i]["b"] + branch_list[i]["b_fr"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]^2+vim[branch_list[i]["f_bus"], t]^2) -
-                (-branch_list[i]["b"]*branch_list[i]["tr"] - branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] + vim[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t])+
-                (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vim[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] - vr[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t])) == 0)
+
+c1 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["f_idx"], t] -(  (branch_list[i]["g"] + branch_list[i]["g_fr"])/branch_list[i]["ttm"]*vm[branch_list[i]["f_bus"], t]^2 + 
+                (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*cos(va[branch_list[i]["f_bus"], t] - va[branch_list[i]["t_bus"], t]))+
+                (-branch_list[i]["b"]*branch_list[i]["tr"]-branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*sin(va[branch_list[i]["f_bus"], t] - va[branch_list[i]["t_bus"], t]))) == 0)
 
 
-c3 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["t_idx"], t] -( (branch_list[i]["g"]+branch_list[i]["g_to"])*(vr[branch_list[i]["t_bus"], t]^2+vim[branch_list[i]["t_bus"], t]^2) +
-                (-branch_list[i]["g"]*branch_list[i]["tr"]-branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vr[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] + vim[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t]) + 
-                (-branch_list[i]["b"]*branch_list[i]["tr"]+branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vim[branch_list[i]["t_bus"], t]*vr[branch_list[i]["f_bus"], t] - vr[branch_list[i]["t_bus"], t]*vim[branch_list[i]["f_bus"], t])) == 0)
+c2 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], q[branch_list[i]["f_idx"], t] -( -(branch_list[i]["b"] + branch_list[i]["b_fr"])/branch_list[i]["ttm"]*vm[branch_list[i]["f_bus"], t]^2 -
+                (-branch_list[i]["b"]*branch_list[i]["tr"] - branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*cos(va[branch_list[i]["f_bus"], t] - va[branch_list[i]["t_bus"], t]))+
+                (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*sin(va[branch_list[i]["f_bus"], t] - va[branch_list[i]["t_bus"], t]))) == 0)
 
 
-c4 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], q[branch_list[i]["t_idx"], t] -( -(branch_list[i]["b"]+branch_list[i]["b_to"])*(vr[branch_list[i]["t_bus"], t]^2+vim[branch_list[i]["t_bus"], t]^2) - 
-                (-branch_list[i]["b"]*branch_list[i]["tr"] + branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]* (vr[branch_list[i]["f_bus"], t]*vr[branch_list[i]["t_bus"], t] + vim[branch_list[i]["f_bus"], t]*vim[branch_list[i]["t_bus"], t]) +
-                (-branch_list[i]["g"]*branch_list[i]["tr"] - branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"] * (vim[branch_list[i]["t_bus"], t]*vr[branch_list[i]["f_bus"], t] - vr[branch_list[i]["t_bus"], t]*vim[branch_list[i]["f_bus"], t])) == 0)
+c3 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["t_idx"], t] -( (branch_list[i]["g"]+branch_list[i]["g_to"])*vm[branch_list[i]["t_bus"], t]^2 +
+                (-branch_list[i]["g"]*branch_list[i]["tr"]-branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*cos(va[branch_list[i]["t_bus"], t] - va[branch_list[i]["f_bus"], t])) + 
+                (-branch_list[i]["b"]*branch_list[i]["tr"]+branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*sin(va[branch_list[i]["t_bus"], t] - va[branch_list[i]["f_bus"], t]))) == 0)
 
-c5 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], angmins[i] <= atan(vim[branch_list[i]["f_bus"], t]/vr[branch_list[i]["f_bus"], t]) - atan(vim[branch_list[i]["t_bus"], t]/vr[branch_list[i]["t_bus"], t]) <= angmaxs[i])
+
+c4 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], q[branch_list[i]["t_idx"], t] -( -(branch_list[i]["b"]+branch_list[i]["b_to"])*vm[branch_list[i]["t_bus"], t]^2 - 
+                (-branch_list[i]["b"]*branch_list[i]["tr"] + branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]* (vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*cos(va[branch_list[i]["t_bus"], t] - va[branch_list[i]["f_bus"], t])) +
+                (-branch_list[i]["g"]*branch_list[i]["tr"] - branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"] * (vm[branch_list[i]["f_bus"], t]*vm[branch_list[i]["t_bus"], t]*sin(va[branch_list[i]["t_bus"], t] - va[branch_list[i]["f_bus"], t]))) == 0)
+
+c5 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], angmins[i] <= va[branch_list[i]["f_bus"], t] -va[branch_list[i]["t_bus"], t]  <= angmaxs[i])
+
 
 c6 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["f_idx"], t]^2 + q[branch_list[i]["f_idx"], t]^2 - branch_list[i]["a_rate_sq"] <= 0)
 
 c7 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], p[branch_list[i]["t_idx"], t]^2 + q[branch_list[i]["t_idx"], t]^2 - branch_list[i]["a_rate_sq"] <= 0)
 
-c8 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["pd"][t] + bus_list[i]["gs"]*(vr[i, t]^2+vim[i, t]^2) + sum(p[j, t] for j in bus_list[i]["arcs"]) - 
+c8 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["pd"][t] + bus_list[i]["gs"]*(vm[i, t]^2) + sum(p[j, t] for j in bus_list[i]["arcs"]) - 
                 sum(pg[k, t] for k in bus_list[i]["gen_idx"]) + sum(pst[l, t] for l in bus_list[i]["storage_idx"]) == 0)
 
-c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["qd"][t] - bus_list[i]["bs"]*(vr[i, t]^2+vim[i, t]^2)  + sum(q[j, t] for j in bus_list[i]["arcs"]) - 
+c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["qd"][t] - bus_list[i]["bs"]*(vm[i, t]^2)  + sum(q[j, t] for j in bus_list[i]["arcs"]) - 
                 sum(qg[k, t] for k in bus_list[i]["gen_idx"]) + sum(qst[l, t] for l in bus_list[i]["storage_idx"])== 0)
-
-c10 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], vmins[i]^2 <= vr[i, t]^2+vim[i, t]^2 <= vmaxs[i]^2)
 
 c11 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t] + pstd[c, t] - pstc[c, t] == storage_list[c]["Pexts"] + storage_list[c]["Zr"]*I[c, t]^2)
 
 c12 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], qst[c, t] == qint[c, t] + storage_list[c]["Qexts"] + storage_list[c]["Zim"]*I[c, t]^2)
 
-c13 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t]^2 + qst[c, t]^2 == (vr[storage_list[c]["bus"], t]^2 + vim[storage_list[c]["bus"], t]^2)*I[c, t]^2)
+c13 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t]^2 + qst[c, t]^2 == vm[storage_list[c]["bus"], t]^2*I[c, t]^2)
 
 c14 = @constraint(model, [c = eachindex(storage_list), t = 2:length(summer_wkdy_qrtr_scalar)], E[c, t] - E[c, t-1] == interval_split*(storage_list[c]["etac"]*pstc[c, t]- pstd[c, t]/storage_list[c]["etad"]))
 
@@ -328,4 +329,3 @@ c24 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy
 
 optimize!(model)
 
-println(storage_list)
