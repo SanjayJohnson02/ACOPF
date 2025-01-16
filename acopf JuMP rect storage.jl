@@ -23,7 +23,6 @@ n_storage = length(my_data["storage"])
 base_MVA = my_data["baseMVA"]
 
 interval_split = my_data["time_elapsed"]
-interval_split = 1
 total_hrs = 24
 
 # from RTS 96 paper
@@ -62,7 +61,7 @@ end
 n_gen = length(my_data["gen"])
 
 #bus # aligns with bus list index
-gen_names = ["i", "cost1", "cost2", "cost3", "bus"]
+gen_names = ["i", "cost1", "cost2", "cost3", "bus", "pstart", "qstart"]
 
 # Create a list of dictionaries for each bus
 gen_list = [
@@ -90,7 +89,8 @@ for key in keys(my_data["gen"])
         gen_list[i]["cost3"] = cost[1]
     end
 
-    #hard coded for time interval
+    gen_list[i]["pstart"] = my_data["gen"][key]["pg"]
+    gen_list[i]["qstart"] = my_data["gen"][key]["qg"]
 
     push!(bus_list[my_data["gen"][key]["gen_bus"]]["gen_idx"], i)
     gen_list[i]["bus"] = my_data["gen"][key]["gen_bus"]
@@ -99,7 +99,6 @@ for key in keys(my_data["gen"])
     qmins[i] = my_data["gen"][key]["qmin"]
     qmaxs[i] = my_data["gen"][key]["qmax"]
 end
-
 
 arc_list = []
 branch_list = []
@@ -216,6 +215,7 @@ end
 
 
 
+
 #optimizer = Juniper.Optimizer
 #nl_solver = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
 
@@ -227,12 +227,12 @@ model = Model(Ipopt.Optimizer)
 set_optimizer_attribute(model, "max_iter", 1000)
 
 #not sure if these should be initialized at nonzero
-vr = @variable(model, vr[i = 1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1/(2^0.5))
-vim = @variable(model, vim[i=1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1/(2^0.5))
+vr = @variable(model, vr[i = 1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)], start = 1)
+vim = @variable(model, vim[i=1:length(bus_list), t = 1:length(summer_wkdy_qrtr_scalar)])
 
-pg = @variable(model, pmins[i] <= pg[i = 1:length(gen_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= pmaxs[i])
+pg = @variable(model, pmins[i] <= pg[i = 1:length(gen_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= pmaxs[i], start = gen_list[i]["pstart"])
 
-qg = @variable(model, qmins[i] <= qg[i =1:length(gen_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= qmaxs[i])
+qg = @variable(model, qmins[i] <= qg[i =1:length(gen_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= qmaxs[i], start = gen_list[i]["qstart"])
 
 p = @variable(model, -rate_as[i] <= p[i =1:length(arc_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= rate_as[i])
 
@@ -247,7 +247,7 @@ pst = @variable(model, pst[i = 1:length(storage_list), t = 1:length(summer_wkdy_
 #this is maybe supposed to have bounds??
 qst = @variable(model, qst[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
 
-I = @variable(model, I[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
+I2 = @variable(model, 0 <= I[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
 
 qint = @variable(model, -storage_list[i]["Srating"] <= qint[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Srating"])
 
@@ -295,11 +295,11 @@ c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr
 
 c10 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], vmins[i]^2 <= vr[i, t]^2+vim[i, t]^2 <= vmaxs[i]^2)
 
-c11 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t] + pstd[c, t] - pstc[c, t] == storage_list[c]["Pexts"] + storage_list[c]["Zr"]*I[c, t]^2)
+c11 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t] + pstd[c, t] - pstc[c, t] == storage_list[c]["Pexts"] + storage_list[c]["Zr"]*I2[c, t])
 
-c12 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], qst[c, t] == qint[c, t] + storage_list[c]["Qexts"] + storage_list[c]["Zim"]*I[c, t]^2)
+c12 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], qst[c, t] == qint[c, t] + storage_list[c]["Qexts"] + storage_list[c]["Zim"]*I2[c, t])
 
-c13 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t]^2 + qst[c, t]^2 == (vr[storage_list[c]["bus"], t]^2 + vim[storage_list[c]["bus"], t]^2)*I[c, t]^2)
+c13 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pst[c, t]^2 + qst[c, t]^2 == (vr[storage_list[c]["bus"], t]^2 + vim[storage_list[c]["bus"], t]^2)*I2[c, t])
 
 c14 = @constraint(model, [c = eachindex(storage_list), t = 2:length(summer_wkdy_qrtr_scalar)], E[c, t] - E[c, t-1] == interval_split*(storage_list[c]["etac"]*pstc[c, t]- pstd[c, t]/storage_list[c]["etad"]))
 
@@ -327,5 +327,3 @@ c24 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy
 
 
 optimize!(model)
-
-println(storage_list)
