@@ -147,8 +147,8 @@ end
 model = Model(Ipopt.Optimizer)
 
 #not sure if these should be initialized at nonzero
-vr = @variable(model, vr[i = 1:length(bus_list)], start = 1/(2^0.5))
-vim = @variable(model, vim[i=1:length(bus_list)], start = 1/(2^0.5))
+vr = @variable(model, vr[i = 1:length(bus_list)], start = 1)
+vim = @variable(model, vim[i=1:length(bus_list)])
 
 pg = @variable(model, pmins[i] <= pg[i = 1:length(gen_list)] <= pmaxs[i])
 
@@ -193,7 +193,7 @@ c7 = @constraint(model, [i = eachindex(branch_list)], 0 >= p[branch_list[i]["t_i
 
 c8 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["pd"] + bus_list[i]["gs"]*(vr[i]^2+vim[i]^2) + sum(p[j] for j in bus_list[i]["arcs"]) - sum(pg[k] for k in bus_list[i]["gen_idx"]) == 0)
 
-#c9 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["qd"] - bus_list[i]["bs"]*(vr[i]^2+vim[i]^2)  + sum(q[j] for j in bus_list[i]["arcs"]) - sum(qg[k] for k in bus_list[i]["gen_idx"]) == 0)
+c9 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["qd"] - bus_list[i]["bs"]*(vr[i]^2+vim[i]^2)  + sum(q[j] for j in bus_list[i]["arcs"]) - sum(qg[k] for k in bus_list[i]["gen_idx"]) == 0)
 
 c10 = @constraint(model, [i = eachindex(bus_list)], vmins[i]^2 <= vr[i]^2+vim[i]^2 <= vmaxs[i]^2)
 

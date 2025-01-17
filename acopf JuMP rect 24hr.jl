@@ -7,6 +7,7 @@ using Interpolations
 
 using JuMP
 using Ipopt =#
+using JuMP
 
 #build nested dictionary
 my_data = PowerModels.parse_file("pglib_opf_case14_ieee_mod.m")
@@ -224,9 +225,9 @@ c6 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_q
 
 c7 = @constraint(model, [i = eachindex(branch_list), t = eachindex(summer_wkdy_qrtr_scalar)], 0 >= p[branch_list[i]["t_idx"], t]^2 + q[branch_list[i]["t_idx"], t]^2 - branch_list[i]["a_rate_sq"])
 
-c8 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["pd"][t] + bus_list[i]["gs"]*(vr[i, t]^2+vim[i, t]^2) + sum(p[j, t] for j in bus_list[i]["arcs"]) - sum(pg[k, t] for k in bus_list[i]["gen_idx"]) == 0)
+#c8 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["pd"][t] + bus_list[i]["gs"]*(vr[i, t]^2+vim[i, t]^2) + sum(p[j, t] for j in bus_list[i]["arcs"]) - sum(pg[k, t] for k in bus_list[i]["gen_idx"]) == 0)
 
-c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["qd"][t] - bus_list[i]["bs"]*(vr[i, t]^2+vim[i, t]^2)  + sum(q[j, t] for j in bus_list[i]["arcs"]) - sum(qg[k, t] for k in bus_list[i]["gen_idx"]) == 0)
+#c9 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], bus_list[i]["qd"][t] - bus_list[i]["bs"]*(vr[i, t]^2+vim[i, t]^2)  + sum(q[j, t] for j in bus_list[i]["arcs"]) - sum(qg[k, t] for k in bus_list[i]["gen_idx"]) == 0)
 
 c10 = @constraint(model, [i = eachindex(bus_list), t = eachindex(summer_wkdy_qrtr_scalar)], vmins[i]^2 <= vr[i, t]^2+vim[i, t]^2 <= vmaxs[i]^2)
 

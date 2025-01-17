@@ -142,10 +142,7 @@ for key in keys(my_data["load"])
     bus_list[my_data["load"][key]["load_bus"]]["qd"] = my_data["load"][key]["qd"]
 end
 
-for key in keys(my_data)
-    println(key)
-end
-println(my_data["bus"])
+
 
 model = Model(Ipopt.Optimizer)
 
@@ -164,37 +161,39 @@ obj = @objective(model, Min, sum(pg[i]^2*gen_list[i]["cost1"]+pg[i]*gen_list[i][
 
 
 #this is hard coded, in this model it doesn't matter but in the future it may?
-c0 = @constraint(model,  va[4] == 0)
+c0 = @constraint(model,  va[4] == 0.0)
+
 
 
 c1 = @constraint(model, [i = eachindex(branch_list)], p[branch_list[i]["f_idx"]] -(  (branch_list[i]["g"] + branch_list[i]["g_fr"])/branch_list[i]["ttm"]*vm[branch_list[i]["f_bus"]]^2 + 
                 (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*cos(va[branch_list[i]["f_bus"]]-va[branch_list[i]["t_bus"]]))+
-                (-branch_list[i]["b"]*branch_list[i]["tr"]-branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["f_bus"]]-va[branch_list[i]["t_bus"]]))) == 0)
+                (-branch_list[i]["b"]*branch_list[i]["tr"]-branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["f_bus"]]-va[branch_list[i]["t_bus"]]))) == 0.0)
 
 
 c2 = @constraint(model, [i = eachindex(branch_list)], q[branch_list[i]["f_idx"]] -( -(branch_list[i]["b"] + branch_list[i]["b_fr"])/branch_list[i]["ttm"]*vm[branch_list[i]["f_bus"]]^2 -
                 (-branch_list[i]["b"]*branch_list[i]["tr"] - branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*cos(va[branch_list[i]["f_bus"]]-va[branch_list[i]["t_bus"]]))+
-                (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["f_bus"]]-va[branch_list[i]["t_bus"]]))) == 0)
+                (-branch_list[i]["g"]*branch_list[i]["tr"] + branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["f_bus"]]-va[branch_list[i]["t_bus"]]))) == 0.0)
 
 
 c3 = @constraint(model, [i = eachindex(branch_list)], p[branch_list[i]["t_idx"]] -( (branch_list[i]["g"]+branch_list[i]["g_to"])*vm[branch_list[i]["t_bus"]]^2 +
                 (-branch_list[i]["g"]*branch_list[i]["tr"]-branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*cos(va[branch_list[i]["t_bus"]]-va[branch_list[i]["f_bus"]])) + 
-                (-branch_list[i]["b"]*branch_list[i]["tr"]+branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["t_bus"]]-va[branch_list[i]["f_bus"]]))) == 0)
+                (-branch_list[i]["b"]*branch_list[i]["tr"]+branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]*(vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["t_bus"]]-va[branch_list[i]["f_bus"]]))) == 0.0)
 
 
 c4 = @constraint(model, [i = eachindex(branch_list)], q[branch_list[i]["t_idx"]] -( -(branch_list[i]["b"]+branch_list[i]["b_to"])*vm[branch_list[i]["t_bus"]]^2 - 
                 (-branch_list[i]["b"]*branch_list[i]["tr"] + branch_list[i]["g"]*branch_list[i]["ti"])/branch_list[i]["ttm"]* (vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*cos(va[branch_list[i]["t_bus"]]-va[branch_list[i]["f_bus"]])) +
-                (-branch_list[i]["g"]*branch_list[i]["tr"] - branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"] * (vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["t_bus"]]-va[branch_list[i]["f_bus"]]))) == 0)
+                (-branch_list[i]["g"]*branch_list[i]["tr"] - branch_list[i]["b"]*branch_list[i]["ti"])/branch_list[i]["ttm"] * (vm[branch_list[i]["f_bus"]]*vm[branch_list[i]["t_bus"]]*sin(va[branch_list[i]["t_bus"]]-va[branch_list[i]["f_bus"]]))) == 0.0)
 
 c5 = @constraint(model, [i = eachindex(branch_list)], angmins[i] <= va[branch_list[i]["f_bus"]] - va[branch_list[i]["t_bus"]] <= angmaxs[i])
 
-c6 = @constraint(model, [i = eachindex(branch_list)], 0 >= p[branch_list[i]["f_idx"]]^2 + q[branch_list[i]["f_idx"]]^2 - branch_list[i]["a_rate_sq"])
+c6 = @constraint(model, [i = eachindex(branch_list)], 0.0 >= p[branch_list[i]["f_idx"]]^2 + q[branch_list[i]["f_idx"]]^2 - branch_list[i]["a_rate_sq"])
 
-c7 = @constraint(model, [i = eachindex(branch_list)], 0 >= p[branch_list[i]["t_idx"]]^2 + q[branch_list[i]["t_idx"]]^2 - branch_list[i]["a_rate_sq"])
+c7 = @constraint(model, [i = eachindex(branch_list)], 0.0 >= p[branch_list[i]["t_idx"]]^2 + q[branch_list[i]["t_idx"]]^2 - branch_list[i]["a_rate_sq"])
 
-c8 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["pd"] + bus_list[i]["gs"]*vm[i]^2 + sum(p[j] for j in bus_list[i]["arcs"]) - sum(pg[k] for k in bus_list[i]["gen_idx"]) == 0)
+c8 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["pd"] + Float64(bus_list[i]["gs"])*vm[i]^2 + sum(p[j] for j in bus_list[i]["arcs"]) - sum(pg[k] for k in bus_list[i]["gen_idx"]) == 0.0)
 
-c9 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["qd"] - bus_list[i]["bs"]*vm[i]^2 + sum(q[j] for j in bus_list[i]["arcs"]) - sum(qg[k] for k in bus_list[i]["gen_idx"]) == 0)
+c9 = @constraint(model, [i = eachindex(bus_list)], bus_list[i]["qd"] - Float64(bus_list[i]["bs"])*vm[i]^2 + sum(q[j] for j in bus_list[i]["arcs"]) - sum(qg[k] for k in bus_list[i]["gen_idx"]) == 0.0)
+
 
 
 optimize!(model)
