@@ -240,6 +240,7 @@ function opf_jump_rect_storage(filename)
 
     q = @variable(model, -rate_as[i] <= q[i=1:length(arc_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= rate_as[i])
 
+
     pstc = @variable(model, 0 <= pstc[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Pcmax"])
 
     pstd = @variable(model, 0 <= pstd[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Pdmax"])
@@ -249,7 +250,7 @@ function opf_jump_rect_storage(filename)
     #this is maybe supposed to have bounds??
     qst = @variable(model, qst[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
 
-    I2 = @variable(model, 0 <= I[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
+    I2 = @variable(model, 0 <= I2[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)])
 
     qint = @variable(model, -storage_list[i]["Srating"] <= qint[i = 1:length(storage_list), t = 1:length(summer_wkdy_qrtr_scalar)] <= storage_list[i]["Srating"])
 
@@ -311,7 +312,7 @@ function opf_jump_rect_storage(filename)
 
     c17 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], -storage_list[c]["Srating"] <= pstd[c, t] - pstc[c, t] <= storage_list[c]["Srating"])
 
-    #c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t]*pstd[c, t] == 0)
+    c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t]*pstd[c, t] == 0)
 
     #for use in MINLP
     #c18 = @constraint(model, [c = eachindex(storage_list), t = eachindex(summer_wkdy_qrtr_scalar)], pstc[c, t] <= storage_list[c]["Pcmax"]*zc[c, t])
