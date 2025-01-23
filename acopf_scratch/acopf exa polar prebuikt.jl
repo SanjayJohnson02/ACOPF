@@ -125,9 +125,7 @@ function ac_power_model(filename; backend = nothing, T = Float64)
 
     o = objective(w, g.cost1 * pg[g.i]^2 + g.cost2 * pg[g.i] + g.cost3 for g in data.gen)
 
-    println(data.gen)
 
-    println(data.ref_buses)
     c1 = constraint(w, va[i] for i in data.ref_buses)
 
     
@@ -138,6 +136,7 @@ function ac_power_model(filename; backend = nothing, T = Float64)
         b.c4 * (vm[b.f_bus] * vm[b.t_bus] * sin(va[b.f_bus] - va[b.t_bus])) for
         b in data.branch
     )
+
     
     
     c3 = constraint(
@@ -189,6 +188,17 @@ function ac_power_model(filename; backend = nothing, T = Float64)
 
     c9 = constraint(w, b.pd + b.gs * vm[b.i]^2 for b in data.bus)
 
+    for b in data.bus
+        println("bus ", b.i)
+        println(b.pd)
+        println(b.qd)
+    end
+
+    for g in data.gen
+        println("bus ", g.bus)
+        println(g.cost2)
+    end
+
     c10 = constraint(w, b.qd - b.bs * vm[b.i]^2 for b in data.bus)
 
     c11 = constraint!(w, c9, a.bus => p[a.i] for a in data.arc)
@@ -201,7 +211,7 @@ function ac_power_model(filename; backend = nothing, T = Float64)
 
 end
 
-m = ac_power_model("pglib_opf_case14_ieee.m")
+m = ac_power_model("pglib_opf_case14_ieee.m");
 ipopt(m)
 
-m
+#m
