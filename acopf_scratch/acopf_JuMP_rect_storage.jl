@@ -104,9 +104,9 @@ function opf_jump_rect_storage(filename)
 
     arc_list = []
     branch_list = []
-    rate_as = []
-    angmaxs = []
-    angmins = []
+    rate_as = Vector{Float64}()
+    angmaxs = Vector{Float64}()
+    angmins = Vector{Float64}()
 
     dict_names = ["i", "rate_a", "from_bus", "to_bus"]
 

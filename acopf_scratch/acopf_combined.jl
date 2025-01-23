@@ -760,7 +760,14 @@ function opf_combined(filename, coords, model_type, solve_method)
     end
 end
 
-model = opf_combined("pglib_opf_case14_ieee.m", "polar", "static", "exa")
-ipopt(model)
-#optimize!(model)
+model = opf_combined("pglib_opf_case14_ieee.m", "polar", "static", "jump")
+#ipopt(model)
+
+#=
+set_attribute(model, "hsllib", HSL_jll.libhsl_path)
+# Use the linear solver MA57
+set_attribute(model, "linear_solver", "ma57")
+=#
+
+optimize!(model)
 

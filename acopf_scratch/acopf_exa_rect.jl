@@ -73,9 +73,9 @@
 
     arc_list = []
     branch_list = []
-    rate_as = []
-    angmaxs = []
-    angmins = []
+    rate_as = Vector{Float64}()
+    angmaxs = Vector{Float64}()
+    angmins = Vector{Float64}()
 
     dict_names = ["i", "rate_a", "from_bus", "to_bus"]
 
@@ -166,17 +166,17 @@
     end
 
 
-    model = ExaCore()
+    model = ExaCore(; backend = CUDABackend())
 
     #not sure if these should be initialized at nonzero
-    vr = variable(model, length(bus_list), start = ones(length(bus_list)))
+    vr = variable(model, length(bus_list), start = CuArray(ones(length(bus_list))))
     vim = variable(model, length(bus_list))
 
-    pg = variable(model, length(gen_list), lvar = pmins, uvar = pmaxs)
-    qg = variable(model, length(gen_list), lvar = qmins, uvar = qmaxs)
+    pg = variable(model, length(gen_list), lvar = CuArray(pmins), uvar = CuArray(pmaxs))
+    qg = variable(model, length(gen_list), lvar = CuArray(qmins), uvar = CuArray(qmaxs))
 
-    p = variable(model, length(arc_list), lvar = -rate_as, uvar = rate_as)
-    q = variable(model, length(arc_list), lvar = -rate_as, uvar = rate_as)
+    p = variable(model, length(arc_list), lvar = CuArray(-rate_as), uvar = CuArray(rate_as))
+    q = variable(model, length(arc_list), lvar = CuArray(-rate_as), uvar = CuArray(rate_as))
 
     obj = objective(model, pg[g.i]^2*g.cost1+pg[g.i]*g.cost2+g.cost3 for g in gen_tuple_list)
 
@@ -227,4 +227,7 @@
     c10 = constraint(model, vr[bus.i]^2+vim[bus.i]^2 for bus in bus_tuple_list; lcon = vmins.^2, ucon = vmaxs.^2) 
     return ExaModel(model)
 end
+
+model = opf_exa_rect("pglib_opf_case14_ieee.m")
+madnlp(model)
 

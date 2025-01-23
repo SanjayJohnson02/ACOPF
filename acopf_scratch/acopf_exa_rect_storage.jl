@@ -94,9 +94,9 @@ function opf_exa_rect_storage(filename)
 
     arc_list = []
     branch_list = []
-    rate_as = []
-    angmaxs = []
-    angmins = []
+    rate_as = Vector{Float64}()
+    angmaxs = Vector{Float64}()
+    angmins = Vector{Float64}()
 
     dict_names = ["i", "rate_a", "from_bus", "to_bus"]
 
@@ -244,7 +244,7 @@ function opf_exa_rect_storage(filename)
         end
     end
 
-    model = ExaCore()
+    model = ExaCore(; backend = CUDABackend())
 
     #not sure if these should be initialized at nonzero
     vr = variable(model, length(bus_list), length(summer_wkdy_qrtr_scalar), start = ones(size(bus_tuple_array)))
@@ -335,5 +335,6 @@ function opf_exa_rect_storage(filename)
     c18 = constraint(model, pstc[stor.c, stor.t]*pstd[stor.c, stor.t] for stor in stor_tuple_array)
     return ExaModel(model)
 end
-#ipopt(ExaModel(model))
 
+model = opf_exa_rect_storage("pglib_opf_case14_ieee_mod.m")
+madnlp(model)
