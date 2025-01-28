@@ -1,7 +1,7 @@
 #using ExaModels
 #using NLPModelsIpopt
 
-    function opf_exa_rect(filename)
+    function opf_exa_rect(filename, backend, process, tol)
     my_data = PowerModels.parse_file(filename)
 
     n_bus = length(my_data["bus"])
@@ -166,17 +166,17 @@
     end
 
 
-    model = ExaCore(; backend = CUDABackend())
+    model = ExaCore(Float64; backend = backend)
 
     #not sure if these should be initialized at nonzero
-    vr = variable(model, length(bus_list), start = CuArray(ones(length(bus_list))))
+    vr = variable(model, length(bus_list), start = (ones(length(bus_list))))
     vim = variable(model, length(bus_list))
 
-    pg = variable(model, length(gen_list), lvar = CuArray(pmins), uvar = CuArray(pmaxs))
-    qg = variable(model, length(gen_list), lvar = CuArray(qmins), uvar = CuArray(qmaxs))
+    pg = variable(model, length(gen_list), lvar = (pmins), uvar = (pmaxs))
+    qg = variable(model, length(gen_list), lvar = (qmins), uvar = (qmaxs))
 
-    p = variable(model, length(arc_list), lvar = CuArray(-rate_as), uvar = CuArray(rate_as))
-    q = variable(model, length(arc_list), lvar = CuArray(-rate_as), uvar = CuArray(rate_as))
+    p = variable(model, length(arc_list), lvar = (-rate_as), uvar = (rate_as))
+    q = variable(model, length(arc_list), lvar = (-rate_as), uvar = (rate_as))
 
     obj = objective(model, pg[g.i]^2*g.cost1+pg[g.i]*g.cost2+g.cost3 for g in gen_tuple_list)
 
@@ -225,9 +225,26 @@
     c9b = constraint!(model, c9, gen.bus => -qg[gen.i] for gen in gen_tuple_list)
 
     c10 = constraint(model, vr[bus.i]^2+vim[bus.i]^2 for bus in bus_tuple_list; lcon = vmins.^2, ucon = vmaxs.^2) 
-    return ExaModel(model)
+    if process == "gpu"
+        result = madnlp(ExaModel(model), tol = tol)
+    elseif process == "cpu"
+        result = ipopt(ExaModel(model), tol = tol )
+    end
+    return [solution(result, vr), result.objective, solution(result, pg)]
 end
 
-model = opf_exa_rect("pglib_opf_case14_ieee.m")
-madnlp(model)
+cpu_sol = opf_exa_rect("pglib_opf_case14_ieee.m", nothing, "cpu", 1e-4)
+#=cpu_sol2 = opf_exa_rect("pglib_opf_case118_ieee.m", nothing, "cpu", 1e-8)
+gpu_sol = opf_exa_rect("pglib_opf_case118_ieee.m", CUDABackend(), "gpu", 1e-4)
+gpu_sol2 = opf_exa_rect("pglib_opf_case118_ieee.m", CUDABackend(), "gpu", 1e-8)
+
+
+println(norm(Array(gpu_sol[3]) - Array(gpu_sol2[3]))/norm(Array(gpu_sol[3])))
+
+println(typeof(gpu_sol2[2]))
+println(cpu_sol[2])
+
+println("vr tol ", norm(cpu_sol[1] - (cpu_sol2[1]))/norm(cpu_sol[1]))
+println("obj tol ", norm(cpu_sol[2] - (gpu_sol[2]))/cpu_sol[2])
+println("pg tol ", norm(cpu_sol[3] - Array(gpu_sol[3]))/norm(cpu_sol[3]))=#
 

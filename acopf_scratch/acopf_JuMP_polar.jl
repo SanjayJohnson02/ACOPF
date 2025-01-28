@@ -201,3 +201,6 @@ model = opf_jump_polar("pglib_opf_case14_ieee.m");
 
 optimize!(model)
 
+for var in JuMP.all_variables(model)
+    println("Variable: ", JuMP.name(var), ", Value: ", JuMP.value(var))
+end

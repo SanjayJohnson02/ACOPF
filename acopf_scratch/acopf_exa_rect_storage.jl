@@ -7,7 +7,7 @@ using Ipopt
 using LinearAlgebra 
 =# 
 
-function opf_exa_rect_storage(filename)
+function opf_exa_rect_storage(filename, backend, process)
     my_data = PowerModels.parse_file(filename)
     n_bus = length(my_data["bus"])
     n_storage = length(my_data["storage"])
@@ -244,7 +244,7 @@ function opf_exa_rect_storage(filename)
         end
     end
 
-    model = ExaCore(; backend = CUDABackend())
+    model = ExaCore(; backend = backend)
 
     #not sure if these should be initialized at nonzero
     vr = variable(model, length(bus_list), length(summer_wkdy_qrtr_scalar), start = ones(size(bus_tuple_array)))
@@ -333,8 +333,19 @@ function opf_exa_rect_storage(filename)
     c17 = constraint(model, pstd[stor.c, stor.t] - pstc[stor.c, stor.t] for stor in stor_tuple_array; lcon = -[stor.Srating for stor in stor_tuple_array], ucon = [stor.Srating for stor in stor_tuple_array])
 
     c18 = constraint(model, pstc[stor.c, stor.t]*pstd[stor.c, stor.t] for stor in stor_tuple_array)
-    return ExaModel(model)
+
+    if process == "gpu"
+        result = madnlp(ExaModel(model), tol = 1e-6)
+    elseif process == "cpu"
+        result = ipopt(ExaModel(model), tol = 1e-6)
+    end
+    return solution(result, vr)
 end
 
-model = opf_exa_rect_storage("pglib_opf_case14_ieee_mod.m")
-madnlp(model)
+gpu_sol = opf_exa_rect_storage("pglib_opf_case14_ieee_mod.m", CUDABackend(), "gpu")
+cpu_sol = opf_exa_rect_storage("pglib_opf_case14_ieee_mod.m", nothing, "cpu")
+
+println(gpu_sol)
+println(cpu_sol)
+
+println(norm(cpu_sol - Array(gpu_sol)))
