@@ -1,5 +1,4 @@
 function opf_exa_rect(filename, backend, process, tol)
-    filename = "pglib_opf_case14_ieee.m"
     my_data = PowerModels.parse_file(filename)
     PowerModels.standardize_cost_terms!(my_data, order = 2)
     PowerModels.calc_thermal_limits!(my_data)
@@ -130,11 +129,35 @@ function opf_exa_rect(filename, backend, process, tol)
 
     c10 = constraint(model, vr[bus.i]^2+vim[bus.i]^2 for bus in buses; lcon = vmin.^2, ucon = vmax.^2) 
     if process == "gpu"
-        result = madnlp(ExaModel(model), tol = tol)
+        result = madnlp(ExaModel(model), tol = tol, linear_solver = Ma57Solver)
     elseif process == "cpu"
-        result = ipopt(ExaModel(model), tol = tol )
+        result = ipopt(ExaModel(model), tol = tol, linear_solver = "ma57")
     end
     return [solution(result, vr), result.objective, solution(result, pg)]
 end
 
-cpu_sol = opf_exa_rect("pglib_opf_case14_ieee.m", nothing, "cpu", 1e-4)
+filename = "acopf_scratch/pglib_opf_case1354_pegase.m"
+cpu_sol = opf_exa_rect(filename, nothing, "cpu", 1e-6)
+cpu_sol2 = opf_exa_rect(filename, nothing, "cpu", 1e-8)
+gpu_sol = opf_exa_rect(filename, CUDABackend(), "gpu", 1e-6)
+gpu_sol2 = opf_exa_rect(filename, CUDABackend(), "gpu", 1e-8)
+
+
+println(filename)
+
+println("Error in gpu solution between 1e-4 and 1e-8 tol")
+println(norm(Array(gpu_sol[3]) - Array(gpu_sol2[3]))/norm(Array(gpu_sol[3])))
+println("Error in cpu solution between 1e-4 and 1e-8 tol")
+println(norm(Array(cpu_sol[3]) - Array(cpu_sol2[3]))/norm(Array(cpu_sol[3])))
+
+
+println("tol for gpu tol = 1e-4")
+println("vr tol ", norm(cpu_sol2[1] - Array(gpu_sol[1]))/norm(cpu_sol2[1]))
+println("obj tol ", norm(cpu_sol2[2] - (gpu_sol[2]))/cpu_sol2[2])
+println("pg tol ", norm(cpu_sol2[3] - Array(gpu_sol[3]))/norm(cpu_sol2[3]))
+
+println("tol for gpu tol = 1e-8")
+println("vr tol ", norm(cpu_sol2[1] - Array(gpu_sol2[1]))/norm(cpu_sol2[1]))
+println("obj tol ", norm(cpu_sol2[2] - (gpu_sol2[2]))/cpu_sol2[2])
+println("pg tol ", norm(cpu_sol2[3] - Array(gpu_sol2[3]))/norm(cpu_sol2[3]))
+

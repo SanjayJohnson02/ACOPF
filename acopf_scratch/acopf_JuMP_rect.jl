@@ -202,3 +202,9 @@ function opf_jump_rect(filename)
 
     return model
 end
+
+model = opf_jump_rect("acopf_scratch/pglib_opf_case9241_pegase.m")
+
+set_attribute(model, "linear_solver", "ma57")
+optimize!(model)
+

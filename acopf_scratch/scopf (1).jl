@@ -37,7 +37,7 @@ function scopf_model(file_name, contingencies; load_factor=1.0, adjust=:droop, v
     JuMP.@variable(model, ref[:gen][i]["qmin"] <= qg[i in keys(ref[:gen]), 1:K] <= ref[:gen][i]["qmax"])
     JuMP.@variable(model, -ref[:branch][l]["rate_a"] <= p[(l,i,j) in ref[:arcs], 1:K] <= ref[:branch][l]["rate_a"])
     v = JuMP.@variable(model, -ref[:branch][l]["rate_a"] <= q[(l,i,j) in ref[:arcs], 1:K] <= ref[:branch][l]["rate_a"])
-    println(v)
+  
     if adjust == :mpecdroop
         JuMP.@variable(model, 0.0 <= ρp[i in keys(ref[:gen]), 2:K])
         JuMP.@variable(model, 0.0 <= ρn[i in keys(ref[:gen]), 2:K])
@@ -166,7 +166,7 @@ function scopf_model(file_name, contingencies; load_factor=1.0, adjust=:droop, v
 end
 
 function demo()
-    case = "pglib_opf_case118_ieee.m"
+    case = "acopf_scratch/pglib_opf_case118_ieee.m"
     contingencies = collect(1:8)
 
     nK = length(contingencies)
@@ -180,7 +180,7 @@ function demo()
 
     @info "# contingencies: $(nK)"
 
-    nlp = ExaModels.ExaModel(model, backend=CUDABackend())
+    nlp = ExaModel(model, backend=CUDABackend())
     #ipopt(nlp)
     madnlp(nlp, tol = 1e-4)
     #=
