@@ -1,0 +1,9 @@
+[deps]
+AmplNLReader = "77dd3d4c-cb1d-5e09-9340-85030ff7ba66"
+HSL_jll = "017b0a0e-03f4-516a-9b91-836bbd1904dd"
+HybridKKT = "59d292e8-f99c-4495-a4cc-613f4397570f"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+MadNCL = "434a0bcb-5a7c-42b2-a9d3-9e3f760e7af0"
+MadNLP = "2621e9c9-9eb4-46b1-8089-e8c72242dfb6"
+MadNLPHSL = "7fb6135f-58fe-4112-84ca-653cf5be0c77"
+NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"

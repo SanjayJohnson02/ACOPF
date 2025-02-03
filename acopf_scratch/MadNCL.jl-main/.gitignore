@@ -1,0 +1,4 @@
+benchmarks/results/*
+benchmarks/eps/*
+benchmarks/svg/*
+benchmarks/tex/*

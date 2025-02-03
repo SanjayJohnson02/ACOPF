@@ -72,7 +72,7 @@ function opf_exa_rect(filename, backend, process, tol)
     angmax = [b["angmax"] for (i, b) in ref[:branch]]
     angmin = [b["angmin"] for (i, b) in ref[:branch]]
 
-    model = ExaCore(Float64; backend = nothing)
+    model = ExaCore(Float64; backend = backend)
 
     #not sure if these should be initialized at nonzero
     vr = variable(model, length(buses), start = (ones(length(buses))))
@@ -129,14 +129,14 @@ function opf_exa_rect(filename, backend, process, tol)
 
     c10 = constraint(model, vr[bus.i]^2+vim[bus.i]^2 for bus in buses; lcon = vmin.^2, ucon = vmax.^2) 
     if process == "gpu"
-        result = madnlp(ExaModel(model), tol = tol, linear_solver = Ma57Solver)
+        result = madnlp(ExaModel(model), tol = tol)
     elseif process == "cpu"
-        result = ipopt(ExaModel(model), tol = tol, linear_solver = "ma57")
+        result = ipopt(ExaModel(model), tol = tol, linear_solver = "ma27")
     end
     return [solution(result, vr), result.objective, solution(result, pg)]
 end
 
-filename = "acopf_scratch/pglib_opf_case1354_pegase.m"
+filename = "pglib_opf_case9241_pegase.m"
 cpu_sol = opf_exa_rect(filename, nothing, "cpu", 1e-6)
 cpu_sol2 = opf_exa_rect(filename, nothing, "cpu", 1e-8)
 gpu_sol = opf_exa_rect(filename, CUDABackend(), "gpu", 1e-6)

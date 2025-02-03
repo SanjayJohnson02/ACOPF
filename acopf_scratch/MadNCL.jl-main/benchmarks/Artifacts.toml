@@ -1,0 +1,13 @@
+[tax]
+git-tree-sha1 = "8226f7f3ec1faa05a1d5bd26332814a25c99de53"
+
+    [[tax.download]]
+    sha256 = "da3dc6f17394600f7f2c01cfef5b6328b3dbcc7ebb2989fb9ed0993e57e8b02f"
+    url = "https://gist.github.com/amontoison/7eb6ffb36c2b7e83680d5b20bff1c95a/raw/8226f7f3ec1faa05a1d5bd26332814a25c99de53.tar.gz"
+
+[PGLib_opf]
+git-tree-sha1 = "0e8968a89b6ad43910a8eda4ec30656add35cf91"
+lazy=false
+    [[PGLib_opf.download]]
+    sha256 = "f1421ce22f0a7b9de8a8b2111776b496348220192ad24aace392c3bf608706c2"
+    url = "https://github.com/power-grid-lib/pglib-opf/archive/refs/tags/v23.07.tar.gz"

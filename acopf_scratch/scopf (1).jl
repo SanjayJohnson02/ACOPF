@@ -10,7 +10,7 @@ using PowerModels
 using Ipopt
 using NLPModelsJuMP
 using MadNLP, MadNLPHSL
-#using MadNCL
+using MadNCL
 using ExaModels
 using HSL_jll
 
@@ -166,7 +166,7 @@ function scopf_model(file_name, contingencies; load_factor=1.0, adjust=:droop, v
 end
 
 function demo()
-    case = "acopf_scratch/pglib_opf_case118_ieee.m"
+    case = "pglib_opf_case118_ieee.m"
     contingencies = collect(1:8)
 
     nK = length(contingencies)
@@ -180,10 +180,10 @@ function demo()
 
     @info "# contingencies: $(nK)"
 
-    nlp = ExaModel(model, backend=CUDABackend())
+    nlp = ExaModel(model, backend = CUDABackend())
     #ipopt(nlp)
-    madnlp(nlp, tol = 1e-4)
-    #=
+    #madnlp(nlp, tol = 1e-4)
+    
     snlp = MadNCL.ScaledModel(nlp)
 
     res = @time MadNCL.madncl(
@@ -199,7 +199,7 @@ function demo()
         slack_reset=false,
         kkt_system=MadNCL.K2rAuglagKKTSystem,
     )
-    println(res.objective / snlp.scaling_obj)=#
+    println(res.objective / snlp.scaling_obj)
 end
 
 demo()

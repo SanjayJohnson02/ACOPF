@@ -1,0 +1,7 @@
+[tax]
+git-tree-sha1 = "8226f7f3ec1faa05a1d5bd26332814a25c99de53"
+
+    [[tax.download]]
+    sha256 = "da3dc6f17394600f7f2c01cfef5b6328b3dbcc7ebb2989fb9ed0993e57e8b02f"
+    url = "https://gist.github.com/amontoison/7eb6ffb36c2b7e83680d5b20bff1c95a/raw/8226f7f3ec1faa05a1d5bd26332814a25c99de53.tar.gz"
+

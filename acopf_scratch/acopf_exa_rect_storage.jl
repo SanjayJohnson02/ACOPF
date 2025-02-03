@@ -7,7 +7,7 @@ using Ipopt
 using LinearAlgebra 
 =# 
 
-function opf_exa_rect_storage(filename, backend, process)
+function opf_exa_rect_storage(filename, backend, process, tol)
     my_data = PowerModels.parse_file(filename)
     n_bus = length(my_data["bus"])
     n_storage = length(my_data["storage"])
@@ -243,7 +243,10 @@ function opf_exa_rect_storage(filename, backend, process)
             stor_tuple_array[t, Int(dict["c"])] = stor_tuple
         end
     end
+    println(size(stor_tuple_array), typeof(stor_tuple_array), stor_tuple_array[1])
 
+
+    
     model = ExaCore(; backend = backend)
 
     #not sure if these should be initialized at nonzero
@@ -257,23 +260,21 @@ function opf_exa_rect_storage(filename, backend, process)
     q = variable(model, length(arc_list), length(summer_wkdy_qrtr_scalar), lvar = -repeat(rate_as, length(summer_wkdy_qrtr_scalar), 1), uvar = repeat(rate_as, length(summer_wkdy_qrtr_scalar), 1))
 
     pstc = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(stor_tuple_array)), uvar = [stor.Pcmax for stor in stor_tuple_array])
-
-    
     pstd = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(stor_tuple_array)), uvar = [stor.Pdmax for stor in stor_tuple_array])#[[stor.Pdmax for stor in stors] for stors in stor_tuple_array])
 
-
     pst = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar))
-
     qst = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar))
     I2 = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(stor_tuple_array)))
     qint = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar), lvar = -[stor.Srating for stor in stor_tuple_array], uvar = [stor.Srating for stor  in stor_tuple_array])
     E = variable(model, length(storage_list), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(stor_tuple_array)), uvar = [stor.Emax for stor in stor_tuple_array])
+
+    
     obj = objective(model, pg[g.i, g.t]^2*g.cost1+pg[g.i, g.t]*g.cost2+g.cost3 for g in gen_tuple_array)
 
 
 
     #this is hard coded, in this model it doesn't matter but in the future it may?
-    c0 = constraint(model,  atan(vim[4, t]/vr[4, t]) for t in eachindex(summer_wkdy_qrtr_scalar))
+    c0 = constraint(model,  atan(vim[1, t]/vr[1, t]) for t in eachindex(summer_wkdy_qrtr_scalar))
 
 
 
@@ -335,17 +336,19 @@ function opf_exa_rect_storage(filename, backend, process)
     c18 = constraint(model, pstc[stor.c, stor.t]*pstd[stor.c, stor.t] for stor in stor_tuple_array)
 
     if process == "gpu"
-        result = madnlp(ExaModel(model), tol = 1e-6)
+        result = madnlp(ExaModel(model), tol = tol)
     elseif process == "cpu"
-        result = ipopt(ExaModel(model), tol = 1e-6)
+        result = ipopt(ExaModel(model), tol = tol)
     end
-    return solution(result, vr)
+    return solution(result, vr)=#
 end
 
+
+#=
 gpu_sol = opf_exa_rect_storage("pglib_opf_case14_ieee_mod.m", CUDABackend(), "gpu")
 cpu_sol = opf_exa_rect_storage("pglib_opf_case14_ieee_mod.m", nothing, "cpu")
 
 println(gpu_sol)
 println(cpu_sol)
 
-println(norm(cpu_sol - Array(gpu_sol)))
+println(norm(cpu_sol - Array(gpu_sol)))=#

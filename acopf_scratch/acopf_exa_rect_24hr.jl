@@ -186,6 +186,8 @@ my_data = PowerModels.parse_file(filename)
         end
     end
 
+    println(typeof(bus_tuple_array), size(bus_tuple_array))
+
     branch_tuple_array = Array{NamedTuple{(:i, :t, :f_idx, :t_idx, :f_bus, :t_bus, :g, :b, :tr, :ti, :ttm, :g_fr, :g_to, :b_fr, :b_to, :a_rate_sq), Tuple{Int, Int, Int, Int, Int, Int, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64}}}(undef, length(summer_wkdy_qrtr_scalar), length(branch_list))
     for t in eachindex(summer_wkdy_qrtr_scalar)
         for i in eachindex(branch_list)
