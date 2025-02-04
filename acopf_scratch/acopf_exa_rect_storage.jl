@@ -340,7 +340,8 @@ function opf_exa_rect_storage(filename, backend, process, tol)
     elseif process == "cpu"
         result = ipopt(ExaModel(model), tol = tol)
     end
-    return solution(result, vr)=#
+
+    return solution(result, vr)
 end
 
 

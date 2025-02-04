@@ -1,4 +1,5 @@
-function opf_exa_rect_stor(filename, backend)
+function opf_exa_mp_combo(filename, backend, coords, storage, corrective_action_ratio = 0.1)
+
     my_data = PowerModels.parse_file(filename)
     PowerModels.standardize_cost_terms!(my_data, order = 2)
     PowerModels.calc_thermal_limits!(my_data)
@@ -19,14 +20,16 @@ function opf_exa_rect_stor(filename, backend)
     for i in 0:length(summer_wkdy_qrtr_scalar) - 1
         summer_wkdy_qrtr_scalar[i+1] = get_profile(i*interval_split)
     end
+    
 
+    T = length(summer_wkdy_qrtr_scalar)
 
     arcdict = Dict(a => k for (k, a) in enumerate(ref[:arcs]))
     busdict = Dict(k => i for (i, (k, v)) in enumerate(ref[:bus]))
     gendict = Dict(k => i for (i, (k, v)) in enumerate(ref[:gen]))
     branchdict = Dict(k => i for (i, (k, v)) in enumerate(ref[:branch]))
-    storagedict = Dict(k => i for (i, (k, v)) in enumerate(ref[:storage]))
 
+    N = length(busdict)
 
     buses = [
             begin
@@ -37,7 +40,7 @@ function opf_exa_rect_stor(filename, backend)
                 qd = sum(load["qd"] for load in bus_loads; init = 0.0)*summer_wkdy_qrtr_scalar[t]
                 bs = sum(shunt["bs"] for shunt in bus_shunts; init = 0.0)
                 (i = busdict[k], pd = pd, gs = gs, qd = qd, bs = bs, t=t)
-            end for  t in eachindex(summer_wkdy_qrtr_scalar), (k, v) in ref[:bus]]
+            end for (k, v) in ref[:bus], t in eachindex(summer_wkdy_qrtr_scalar) ]
         
     gens = [
             (
@@ -47,12 +50,11 @@ function opf_exa_rect_stor(filename, backend)
                 cost3 = v["cost"][3],
                 bus = busdict[v["gen_bus"]],
                 t = t
-            ) for  t in eachindex(summer_wkdy_qrtr_scalar), (k, v) in ref[:gen]
+            ) for  (k, v) in ref[:gen], t in eachindex(summer_wkdy_qrtr_scalar)
         ]
 
     arcs = [
-            (i = k, rate_a = ref[:branch][l]["rate_a"], bus = busdict[i], t=t) for
-             t in eachindex(summer_wkdy_qrtr_scalar), (k, (l, i, j)) in enumerate(ref[:arcs])
+            (i = k, rate_a = ref[:branch][l]["rate_a"], bus = busdict[i], t=t) for (k, (l, i, j)) in enumerate(ref[:arcs]), t in eachindex(summer_wkdy_qrtr_scalar) 
         ]
 
     branches = [
@@ -77,32 +79,37 @@ function opf_exa_rect_stor(filename, backend)
                 rate_a_sq = branch["rate_a"]^2,
                 t = t
                 )
-            end  for t in eachindex(summer_wkdy_qrtr_scalar), (i, branch) in ref[:branch]
+            end for (i, branch) in ref[:branch],  t in eachindex(summer_wkdy_qrtr_scalar) 
         ]
-
-    storages = [
-        begin
-            (c = i, 
-            t=t,
-            Einit = stor["energy"],
-            Emax = stor["energy_rating"],
-            Pcmax = stor["charge_rating"],
-            Pdmax = stor["discharge_rating"],
-            etac = stor["charge_efficiency"],
-            etad = stor["discharge_efficiency"],
-            Zr = stor["r"],
-            Zim = stor["x"],
-            Srating = stor["thermal_rating"],
-            Pexts = stor["ps"],
-            Qexts = stor["qs"],
-            bus = busdict[stor["storage_bus"]])
-        end for t in eachindex(summer_wkdy_qrtr_scalar), (i, stor) in ref[:storage]
-    ]
+    if storage
+        storagedict =  Dict(k => i for (i, (k, v)) in enumerate(ref[:storage]))
+            
+        storages = [
+            begin
+                (c = i, 
+                t=t,
+                Einit = stor["energy"],
+                Emax = stor["energy_rating"],
+                Pcmax = stor["charge_rating"],
+                Pdmax = stor["discharge_rating"],
+                etac = stor["charge_efficiency"],
+                etad = stor["discharge_efficiency"],
+                Zr = stor["r"],
+                Zim = stor["x"],
+                Srating = stor["thermal_rating"],
+                Pexts = stor["ps"],
+                Qexts = stor["qs"],
+                bus = busdict[stor["storage_bus"]])
+            end for t in eachindex(summer_wkdy_qrtr_scalar) for (i, stor) in ref[:storage]
+        ]
+    end
+    
     ref_buses = [busdict[i] for (i, k) in ref[:ref_buses]]
     vmax = [v["vmax"] for (k, v) in ref[:bus]]
     vmin = [v["vmin"] for (k, v) in ref[:bus]]
     pmax = [v["pmax"] for (k, v) in ref[:gen]]
     pmin = [v["pmin"] for (k, v) in ref[:gen]]
+    delP = corrective_action_ratio.*(pmax .- pmin)
     qmax = [v["qmax"] for (k, v) in ref[:gen]]
     qmin = [v["qmin"] for (k, v) in ref[:gen]]
     rate_a = [ref[:branch][l]["rate_a"] for (k, (l, i, j)) in enumerate(ref[:arcs])]
@@ -113,27 +120,27 @@ function opf_exa_rect_stor(filename, backend)
     vr = variable(model, length(busdict), length(summer_wkdy_qrtr_scalar), start = ones(size(buses)))
     vim = variable(model, length(busdict), length(summer_wkdy_qrtr_scalar))
 
-    pg = variable(model, length(gendict), length(summer_wkdy_qrtr_scalar), lvar = repeat(pmin, length(summer_wkdy_qrtr_scalar), 1), uvar = repeat(pmax, length(summer_wkdy_qrtr_scalar), 1))
-    qg = variable(model, length(gendict),length(summer_wkdy_qrtr_scalar), lvar = repeat(qmin, length(summer_wkdy_qrtr_scalar), 1), uvar = repeat(qmax, length(summer_wkdy_qrtr_scalar), 1))
+    pg = variable(model, length(gendict), length(summer_wkdy_qrtr_scalar), lvar = repeat(pmin, 1, length(summer_wkdy_qrtr_scalar)), uvar = repeat(pmax, length(summer_wkdy_qrtr_scalar), 1))
+    qg = variable(model, length(gendict), length(summer_wkdy_qrtr_scalar), lvar = repeat(qmin, 1, length(summer_wkdy_qrtr_scalar)), uvar = repeat(qmax, length(summer_wkdy_qrtr_scalar), 1))
 
-    p = variable(model, length(arcdict), length(summer_wkdy_qrtr_scalar), lvar = -repeat(rate_a, length(summer_wkdy_qrtr_scalar), 1), uvar = repeat(rate_a, length(summer_wkdy_qrtr_scalar), 1))
-    q = variable(model, length(arcdict), length(summer_wkdy_qrtr_scalar), lvar = -repeat(rate_a, length(summer_wkdy_qrtr_scalar), 1), uvar = repeat(rate_a, length(summer_wkdy_qrtr_scalar), 1))
-
+    p = variable(model, length(arcdict), length(summer_wkdy_qrtr_scalar), lvar = -repeat(rate_a, 1, length(summer_wkdy_qrtr_scalar)), uvar = repeat(rate_a, 1, length(summer_wkdy_qrtr_scalar)))
+    q = variable(model, length(arcdict), length(summer_wkdy_qrtr_scalar), lvar = -repeat(rate_a, 1, length(summer_wkdy_qrtr_scalar)), uvar = repeat(rate_a, 1, length(summer_wkdy_qrtr_scalar)))
 
     #storage variables
-    pstc = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)), uvar = [stor.Pcmax for stor in storages])
-    
-    pstd = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)), uvar = [stor.Pdmax for stor in storages])
+    if storage
+        pstc = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)), uvar = [stor.Pcmax for stor in storages])
+        
+        pstd = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)), uvar = [stor.Pdmax for stor in storages])
 
 
-    pst = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar))
+        pst = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar))
 
 
-    qst = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar))
-    I2 = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)))
-    qint = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = -[stor.Srating for stor in storages], uvar = [stor.Srating for stor  in storages])
-    E = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)), uvar = [stor.Emax for stor in storages])
-    
+        qst = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar))
+        I2 = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)))
+        qint = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = -[stor.Srating for stor in storages], uvar = [stor.Srating for stor  in storages])
+        E = variable(model, length(storagedict), length(summer_wkdy_qrtr_scalar), lvar = zeros(size(storages)), uvar = [stor.Emax for stor in storages])
+    end    
     
     obj = objective(model, pg[g.i, g.t]^2*g.cost1+pg[g.i, g.t]*g.cost2+g.cost3 for g in gens)
 
@@ -143,7 +150,7 @@ function opf_exa_rect_stor(filename, backend)
         c0 = constraint(model,  atan(vim[i, t]/vr[i, t]) for t in eachindex(summer_wkdy_qrtr_scalar))
     end
 
-
+    
 
     c1 = constraint(model, p[branch.f_idx, branch.t] -(  (branch.g + branch.g_fr)/branch.ttm*(vr[branch.f_bus, branch.t]^2+vim[branch.f_bus, branch.t]^2) + 
                     (-branch.g*branch.tr + branch.b*branch.ti)/branch.ttm*(vr[branch.f_bus, branch.t]*vr[branch.t_bus, branch.t] + vim[branch.f_bus, branch.t]*vim[branch.t_bus, branch.t])+
@@ -164,48 +171,59 @@ function opf_exa_rect_stor(filename, backend)
                     (-branch.b*branch.tr + branch.g*branch.ti)/branch.ttm* (vr[branch.f_bus, branch.t]*vr[branch.t_bus, branch.t] + vim[branch.f_bus, branch.t]*vim[branch.t_bus, branch.t]) +
                     (-branch.g*branch.tr - branch.b*branch.ti)/branch.ttm * (vim[branch.t_bus, branch.t]*vr[branch.f_bus, branch.t] - vr[branch.t_bus, branch.t]*vim[branch.f_bus, branch.t])) for branch in branches)
 
+    
 
 
+    c5 = constraint(model, atan(vim[branch.f_bus, branch.t]/vr[branch.f_bus, branch.t]) - atan(vim[branch.t_bus, branch.t]/vr[branch.t_bus, branch.t]) for branch in branches; lcon = repeat(angmin, 1, length(summer_wkdy_qrtr_scalar)), ucon = repeat(angmax, 1, length(summer_wkdy_qrtr_scalar)))
 
-    c5 = constraint(model, atan(vim[branch.f_bus, branch.t]/vr[branch.f_bus, branch.t]) - atan(vim[branch.t_bus, branch.t]/vr[branch.t_bus, branch.t]) for branch in branches; lcon = repeat(angmin, length(summer_wkdy_qrtr_scalar), 1), ucon = repeat(angmax, length(summer_wkdy_qrtr_scalar), 1))
+    c6 =  constraint(model, p[branch.f_idx, branch.t]^2 + q[branch.f_idx, branch.t]^2 - branch.rate_a_sq for branch in branches; lcon = fill(-Inf, size(branches)))
 
-    c6 =  constraint(model, p[branch.f_idx, branch.t]^2 + q[branch.f_idx, branch.t]^2 - branch.rate_a_sq for branch in branches; lcon = fill!(similar(branches, Float64, size(branches)), -Inf))
-
-    c7 =  constraint(model, p[branch.t_idx, branch.t]^2 + q[branch.t_idx, branch.t]^2 - branch.rate_a_sq for branch in branches; lcon = fill!(similar(branches, Float64, size(branches)), -Inf))
+    c7 =  constraint(model, p[branch.t_idx, branch.t]^2 + q[branch.t_idx, branch.t]^2 - branch.rate_a_sq for branch in branches; lcon = fill(-Inf, size(branches)))
 
     c8 = constraint(model, bus.pd + bus.gs*(vr[bus.i, bus.t]^2 + vim[bus.i, bus.t]^2) for bus in buses)
-    c8a = constraint!(model, c8, (arc.t, arc.bus) => p[arc.i, arc.t] for arc in arcs)
-    c8b = constraint!(model, c8, (gen.t, gen.bus) => -pg[gen.i, gen.t] for gen in gens)
-    c8c = constraint!(model, c8, (stor.t, stor.bus) => pst[stor.c, stor.t] for stor in storages)
-
+    c8a = constraint!(model, c8, (arc.bus) + N*(arc.t-1) => p[arc.i, arc.t] for arc in arcs)
+    c8b = constraint!(model, c8, (gen.bus) +N*(gen.t-1) => -pg[gen.i, gen.t] for gen in gens)
+    
 
     c9 = constraint(model, bus.qd - bus.bs*(vr[bus.i, bus.t]^2 + vim[bus.i, bus.t]^2) for bus in buses)
-    c9a = constraint!(model, c9, (arc.t, arc.bus) => q[arc.i, arc.t] for arc in arcs)
-    c9b = constraint!(model, c9, (gen.t, gen.bus) => -qg[gen.i, gen.t] for gen in gens)
-    c9c = constraint!(model, c9, (stor.t, stor.bus) => qst[stor.c, stor.t] for stor in storages)
+    c9a = constraint!(model, c9, (arc.bus) + N*(arc.t-1) => q[arc.i, arc.t] for arc in arcs)
+    c9b = constraint!(model, c9, (gen.bus) + N*(gen.t-1) => -qg[gen.i, gen.t] for gen in gens)
+    
 
     
-    c10 = constraint(model, vr[bus.i, bus.t]^2+vim[bus.i, bus.t]^2 for bus in buses; lcon = repeat(vmin, length(summer_wkdy_qrtr_scalar), 1).^2, ucon = repeat(vmax, length(summer_wkdy_qrtr_scalar), 1).^2) 
+    c10 = constraint(model, vr[bus.i, bus.t]^2+vim[bus.i, bus.t]^2 for bus in buses; lcon = repeat(vmin, 1, length(summer_wkdy_qrtr_scalar)).^2, ucon = repeat(vmax, 1, length(summer_wkdy_qrtr_scalar)).^2) 
 
     
-    c11 = constraint(model, pst[stor.c, stor.t] + pstd[stor.c, stor.t] - pstc[stor.c, stor.t] - stor.Pexts - stor.Zr*I2[stor.c, stor.t] for stor in storages)
+    c19 = constraint(model, pg[gen.i, gen.t - 1] - pg[gen.i, gen.t] for gen in gens[:, 2:length(summer_wkdy_qrtr_scalar)]; lcon = -repeat(delP, 1, length(summer_wkdy_qrtr_scalar)-1), ucon = repeat(delP, 1, length(summer_wkdy_qrtr_scalar)-1))
+    
+    if storage
 
-    c12 = constraint(model, qst[stor.c, stor.t] - qint[stor.c, stor.t] - stor.Qexts - stor.Zim*I2[stor.c, stor.t] for stor in storages)
+        c8c = constraint!(model, c8, (stor.t, stor.bus) => pst[stor.c, stor.t] for stor in storages)
 
-    c13 = constraint(model, pst[stor.c, stor.t]^2 + qst[stor.c, stor.t]^2 - (vr[stor.bus, stor.t]^2 + vim[stor.bus, stor.t]^2)*I2[stor.c, stor.t] for stor in storages)
+        c9c = constraint!(model, c9, (stor.t, stor.bus) => qst[stor.c, stor.t] for stor in storages)
+        
+        c11 = constraint(model, pst[stor.c, stor.t] + pstd[stor.c, stor.t] - pstc[stor.c, stor.t] - stor.Pexts - stor.Zr*I2[stor.c, stor.t] for stor in storages)
 
-    c14 = constraint(model, E[stor.c, stor.t] - E[stor.c, stor.t - 1] - interval_split*(stor.etac*pstc[stor.c, stor.t] - pstd[stor.c, stor.t]/stor.etad) for stor in storages[2:length(summer_wkdy_qrtr_scalar), :])
+        c12 = constraint(model, qst[stor.c, stor.t] - qint[stor.c, stor.t] - stor.Qexts - stor.Zim*I2[stor.c, stor.t] for stor in storages)
 
-    c15 = constraint(model, E[stor.c, stor.t] - stor.Einit - interval_split*(stor.etac*pstc[stor.c, stor.t] - pstd[stor.c, stor.t]/stor.etad) for stor in storages[1, :])
+        c13 = constraint(model, pst[stor.c, stor.t]^2 + qst[stor.c, stor.t]^2 - (vr[stor.bus, stor.t]^2 + vim[stor.bus, stor.t]^2)*I2[stor.c, stor.t] for stor in storages)
 
-    c16 = constraint(model, pst[stor.c, stor.t]^2 + qst[stor.c, stor.t]^2 - stor.Srating^2 for stor in storages; lcon = fill!(similar(storages, Float64, size(storages)), -Inf))
+        c14 = constraint(model, E[stor.c, stor.t] - E[stor.c, stor.t - 1] - interval_split*(stor.etac*pstc[stor.c, stor.t] - pstd[stor.c, stor.t]/stor.etad) for stor in storages[2:length(summer_wkdy_qrtr_scalar), :])
 
-    c17 = constraint(model, pstd[stor.c, stor.t] - pstc[stor.c, stor.t] for stor in storages; lcon = -[stor.Srating for stor in storages], ucon = [stor.Srating for stor in storages])
+        c15 = constraint(model, E[stor.c, stor.t] - stor.Einit - interval_split*(stor.etac*pstc[stor.c, stor.t] - pstd[stor.c, stor.t]/stor.etad) for stor in storages[1, :])
 
-    c18 = constraint(model, pstc[stor.c, stor.t]*pstd[stor.c, stor.t] for stor in storages)
+        c16 = constraint(model, pst[stor.c, stor.t]^2 + qst[stor.c, stor.t]^2 - stor.Srating^2 for stor in storages; lcon = fill!(similar(storages, Float64, size(storages)), -Inf))
+
+        c17 = constraint(model, pstd[stor.c, stor.t] - pstc[stor.c, stor.t] for stor in storages; lcon = -[stor.Srating for stor in storages], ucon = [stor.Srating for stor in storages])
+
+        c18 = constraint(model, pstc[stor.c, stor.t]*pstd[stor.c, stor.t] for stor in storages)
 
 
-    vars = (vr = vr, vim = vim, pg = pg, qg = qg, p = p, q = q, pstc = pstc, pstd = pstd, pst = pst, qst = qst, I2 = I2, qint = qint, E = E)
+        vars = (vr = vr, vim = vim, pg = pg, qg = qg, p = p, q = q, pstc = pstc, pstd = pstd, pst = pst, qst = qst, I2 = I2, qint = qint, E = E)
+    else
+        #vars = (vr = vr, vim = vim, pg = pg, qg = qg, p = p, q = q)
+        vars = []
+    end
     return (ExaModel(model), vars)
     #=
     if process == "gpu"
