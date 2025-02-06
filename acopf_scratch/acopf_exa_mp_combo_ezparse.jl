@@ -218,7 +218,6 @@ function opf_exa_mp_combo(filename, backend, coords, storage, corrective_action_
 
         c18 = constraint(model, pstc[stor.c, stor.t]*pstd[stor.c, stor.t] for stor in storages)
 
-
         vars = (vr = vr, vim = vim, pg = pg, qg = qg, p = p, q = q, pstc = pstc, pstd = pstd, pst = pst, qst = qst, I2 = I2, qint = qint, E = E)
     else
         #vars = (vr = vr, vim = vim, pg = pg, qg = qg, p = p, q = q)
